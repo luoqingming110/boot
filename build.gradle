@@ -1,0 +1,45 @@
+group 'qingming'
+version '1.0-SNAPSHOT'
+
+buildscript {
+    repositories {
+        maven { url "https://repo.spring.io/libs-release" }
+        mavenLocal()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:1.1.10.RELEASE")
+    }
+}
+apply plugin: 'java'
+apply plugin: 'eclipse'
+apply plugin: 'idea'
+apply plugin: 'spring-boot'
+jar {
+    baseName = 'helloworld'
+    version =  '0.1.0'
+}
+repositories {
+    mavenLocal()
+    mavenCentral()
+    maven { url "https://repo.spring.io/libs-release" }
+    maven {
+        url 'http://172.17.0.59:8081/nexus/content/repositories/zhaopin_snapshots'
+    }
+    maven {
+        url 'http://maven.oschina.net/content/groups/public/'
+    }
+    maven {
+        url 'http://oss.sonatype.org/content/repositories/github-releases/'
+    }
+    maven {
+        url 'http://clojars.org/repo'
+    }
+}
+dependencies {
+    compile("org.springframework.boot:spring-boot-starter-web")
+    testCompile("junit:junit")
+}
+task wrapper(type: Wrapper) {
+    gradleVersion = '2.2.1'
+}
