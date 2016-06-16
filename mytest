@@ -1,0 +1,146 @@
+package com.zhaopin.api.container.filter;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.inject.Inject;
+import javax.servlet.Filter;
+import javax.servlet.FilterChain;
+import javax.servlet.FilterConfig;
+import javax.servlet.ServletException;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServletRequest;
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.container.ContainerRequestContext;
+import javax.ws.rs.container.ContainerRequestFilter;
+import javax.ws.rs.container.PreMatching;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MultivaluedMap;
+import javax.ws.rs.ext.WriterInterceptor;
+import javax.ws.rs.ext.WriterInterceptorContext;
+
+import org.glassfish.jersey.server.ContainerRequest;
+
+import scala.Array;
+
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONException;
+import com.alibaba.fastjson.JSONObject;
+import com.zhaopin.api.container.RequestID;
+import com.zhaopin.api.org.common.Logger;
+import com.zhaopin.api.org.common.LoggerFactory;
+
+@PreMatching
+public class RequestFilter implements ContainerRequestFilter,WriterInterceptor {
+	private static final Logger log = LoggerFactory
+			.getLogger(RequestFilter.class);
+	
+	@Context 
+	HttpServletRequest Servletrequest;
+	
+	@Inject
+	private javax.inject.Provider<ContainerRequest> request;
+
+	@Override
+	public void filter(ContainerRequestContext context) throws IOException {
+	
+		RequestID.setRequestID();
+		String method = context.getMethod();
+	    String path =context.getUriInfo().getPath();
+	    //int count=path.indexOf("serviceopen");
+		//POST 请求
+	    String userInfo = context.getHeaderString("X-UserzInfo");
+	    JSONObject userobject = JSONObject.parseObject(userInfo);
+	    long userIdh = userobject.getLong("userId");
+	    long orgIdh = userobject.getLongValue("orgId");
+	    String versionh = userobject.getString("version");
+	    
+	    
+		if (path.indexOf("serviceopen")==0 && method.equals("POST")){
+			
+		MultivaluedMap<String, String> map= context.getUriInfo().getQueryParameters();
+		List<String> userid = map.get("userid");
+		List<String> orgid = map.get("orgid");
+		List<String> userId=new ArrayList<String>();
+		List<String> orgId=new  ArrayList<String>();
+		if(userid==null){
+			userId = map.get("userId");
+		}
+		if(orgid==null){
+			orgId = map.get("userId");
+		}	
+		ContainerRequest r = request.get();
+		InputStream is = r.getEntityStream();
+		Map<String, Object> req = new HashMap<String, Object>();
+		req.put("Uri", r.getRequestUri());
+		req.put("Headers", r.getHeaders());
+		if (r.getLength()>0) {
+		
+			String post="";
+			if(is.markSupported()){
+				is.mark(r.getLength());
+				post = inputStream2String(is);
+				is.reset();	
+			}else{
+				
+				post = inputStream2String(is);
+				if(post.startsWith("{")){
+				
+			    JSONObject postobject=	(JSONObject) JSONObject.parse(post);
+			    if(userid!=null)  postobject.put("userid", userid.get(0));
+			    else if(userId!=null) postobject.put("userId", userId.get(0));
+			    if(orgid!=null)  postobject.put("orgid", orgid.get(0));
+			    else if(orgId!=null) postobject.put("orgId", orgId.get(0));	
+			    post=JSONObject.toJSONString(postobject);
+				r.setEntityStream(new ByteArrayInputStream(post.getBytes("UTF-8")));
+								
+				}else if(post.startsWith("[")){   //jsonarray 
+					
+					 JSONArray jsonarray= JSON.parseArray(post);	
+					 for(int i=0;i<jsonarray.size();i++){
+						 JSONObject object=   (JSONObject) jsonarray.get(i);
+						 if(userid!=null)  object.put("userid", userid.get(0));
+						 else if(userId!=null) object.put("userId", userId.get(0));
+						 if(orgid!=null)  object.put("orgid", orgid.get(0));
+						 else if(orgId!=null) object.put("orgId", orgId.get(0));							 
+					 }	
+					 post=JSONArray.toJSONString(jsonarray);
+				     r.setEntityStream(new ByteArrayInputStream(post.getBytes("UTF-8")));	 
+				}
+				
+			}			
+			req.put("Post", post);
+		}
+		log.info("{\"Request\":{}}", JSON.toJSONString(req));
+		}
+		
+	}
+
+	public static String inputStream2String(InputStream is) throws IOException {
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		int i = -1;
+		while ((i = is.read()) != -1) {
+			baos.write(i);
+		}
+		return baos.toString();
+	}
+
+	@Override
+	public void aroundWriteTo(WriterInterceptorContext context)
+			throws IOException, WebApplicationException {
+		log.info("{\"ExecuteTime\":\"{}\",\"Response\":{}}"
+				,System.currentTimeMillis()-RequestID.getRequestTime()
+				, context.getEntity());
+		context.proceed();
+	}
+
+	
+}
